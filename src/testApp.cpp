@@ -1,253 +1,302 @@
 #include "testApp.h"
 #include <opencv2/opencv.hpp>
-
-using namespace cv;
 //-------------------------------------------------------t-------
-void testApp::setup() {
-	ofSetLogLevel(OF_LOG_VERBOSE);
+void testApp::setup()
+{
+    ofSetLogLevel(OF_LOG_VERBOSE);
 
-	// enable depth->video image calibration
-	kinect.setRegistration(true);
+    // enable depth->video image calibration
+    kinect.setRegistration(true);
 
-	//kinect.init();
-	kinect.init(true); // shows infrared instead of RGB video image
-	//kinect.init(false, false); // disable video image (faster fps)
+    kinect.init();
+    //kinect.init(true); // shows infrared instead of RGB video image
+    //kinect.init(false, false); // disable video image (faster fps)
 
-	kinect.open();		// opens first available kinect
-	//kinect.open(1);	// open a kinect by id, starting with 0 (sorted by serial # lexicographically))
-	//kinect.open("A00362A08602047A");	// open a kinect using it's unique serial #
+    kinect.open();		// opens first available kinect
+    //kinect.open(1);	// open a kinect by id, starting with 0 (sorted by serial # lexicographically))
+    //kinect.open("A00362A08602047A");	// open a kinect using it's unique serial #
 
 #ifdef USE_TWO_KINECTS
-	kinect2.init();
-	kinect2.open();
+    kinect2.init();
+    kinect2.open();
 #endif
 
-	colorImg.allocate(kinect.width, kinect.height);
-	grayImage.allocate(kinect.width, kinect.height);
-	grayThreshNear.allocate(kinect.width, kinect.height);
-	grayThreshFar.allocate(kinect.width, kinect.height);
+    colorImg.allocate(kinect.width, kinect.height);
+    grayImage.allocate(kinect.width, kinect.height);
+    grayThreshNear.allocate(kinect.width, kinect.height);
+    grayThreshFar.allocate(kinect.width, kinect.height);
 
-	nearThreshold = 230;
-	farThreshold = 70;
-	bThreshWithOpenCV = true;
+    // zero the tilt on startup
+    angle = -2;
+    kinect.setCameraTiltAngle(angle);
 
-	ofSetFrameRate(60);
 
-	// zero the tilt on startup
-	angle = 0;
-	kinect.setCameraTiltAngle(angle);
+    nearThreshold = 500;
+    farThreshold = 970;
 
-	// start from the front
-	bDrawPointCloud = false;
+    kinect.setDepthClipping( nearThreshold, farThreshold);
+
+    bThreshWithOpenCV = true;
+
+    ofSetFrameRate(60);
+    //    cv::waitKey(10);
+     //grayMat= cv::zeros(480, 640, CV_8UC1);
+
+    // start from the front
+    bDrawPointCloud = false;
 }
 
 //--------------------------------------------------------------
-void testApp::update() {
+void testApp::update()
+{
 
-	ofBackground(100, 100, 100);
+    ofBackground(100, 100, 100);
 
-	kinect.update();
+    kinect.update();
+    cv::waitKey(200);
+    // there is a new frame and we are connected
+    if(kinect.isFrameNew())
+    {
 
-	// there is a new frame and we are connected
-	if(kinect.isFrameNew()) {
+        // load grayscale depth image from the kinect source
+        grayImage.setFromPixels(kinect.getDepthPixels(), kinect.width, kinect.height);
 
-		// load grayscale depth image from the kinect source
-		grayImage.setFromPixels(kinect.getDepthPixels(), kinect.width, kinect.height);
 
-		// we do two thresholds - one for the far plane and one for the near plane
-		// we then do a cvAnd to get the pixels which are a union of the two thresholds
-		if(bThreshWithOpenCV) {
-			grayThreshNear = grayImage;
-			grayThreshFar = grayImage;
-			grayThreshNear.threshold(nearThreshold, true);
-			grayThreshFar.threshold(farThreshold);
-			cvAnd(grayThreshNear.getCvImage(), grayThreshFar.getCvImage(), grayImage.getCvImage(), NULL);
-		} else {
 
-			// or we do it ourselves - show people how they can work with the pixels
-			unsigned char * pix = grayImage.getPixels();
+        if(bThreshWithOpenCV)
+        {
+            grayImage.threshold(0,false);
+        }
+//
+//		// we do two thresholds - one for the far plane and one for the near plane
+//		// we then do a cvAnd to get the pixels which are a union of the two thresholds
+//		if(bThreshWithOpenCV) {
+//			grayThreshNear = grayImage;
+//			grayThreshFar = grayImage;
+//			grayThreshNear.threshold(nearThreshold, true);
+//			grayThreshFar.threshold(farThreshold);
+//			cvAnd(grayThreshNear.getCvImage(), grayThreshFar.getCvImage(), grayImage.getCvImage(), NULL);
+//		} else {
+//
+//			// or we do it ourselves - show people how they can work with the pixels
+//			unsigned char * pix = grayImage.getPixels();
+//
+//			int numPixels = grayImage.getWidth() * grayImage.getHeight();
+//			for(int i = 0; i < numPixels; i++) {
+//				if(pix[i] < nearThreshold && pix[i] > farThreshold) {
+//					pix[i] = 255;
+//				} else {
+//					pix[i] = 0;
+//				}
+//			}
+//		}
 
-			int numPixels = grayImage.getWidth() * grayImage.getHeight();
-			for(int i = 0; i < numPixels; i++) {
-				if(pix[i] < nearThreshold && pix[i] > farThreshold) {
-					pix[i] = 255;
-				} else {
-					pix[i] = 0;
-				}
-			}
-		}
+        // update the cv images
+        grayImage.flagImageChanged();
 
-		// update the cv images
-		grayImage.flagImageChanged();
-
-		// find contours which are between the size of 20 pixels and 1/3 the w*h pixels.
-		// also, find holes is set to true so we will get interior contours as well....
-		contourFinder.findContours(grayImage, 10, (kinect.width*kinect.height)/2, 20, false);
-	}
-
-#ifdef USE_TWO_KINECTS
-	kinect2.update();
-#endif
-}
-
-//--------------------------------------------------------------
-void testApp::draw() {
-
-	ofSetColor(255, 255, 255);
-
-	if(bDrawPointCloud) {
-		easyCam.begin();
-		drawPointCloud();
-		easyCam.end();
-	} else {
-		// draw from the live kinect
-		kinect.drawDepth(10, 10, 400, 300);
-		kinect.draw(420, 10, 400, 300);
-
-		grayImage.draw(10, 320, 400, 300);
-		contourFinder.draw(10, 320, 400, 300);
+        // find contours which are between the size of 20 pixels and 1/3 the w*h pixels.
+        // also, find holes is set to true so we will get interior contours as well....
+        contourFinder.findContours(grayImage, 40, (kinect.width*kinect.height)/2, 20, false);
+    }
 
 #ifdef USE_TWO_KINECTS
-		kinect2.draw(420, 320, 400, 300);
-#endif
-	}
-
-	// draw instructions
-	ofSetColor(255, 255, 255);
-	stringstream reportStream;
-	reportStream << "accel is: " << ofToString(kinect.getMksAccel().x, 2) << " / "
-	<< ofToString(kinect.getMksAccel().y, 2) << " / "
-	<< ofToString(kinect.getMksAccel().z, 2) << endl
-	<< "press p to switch between images and point cloud, rotate the point cloud with the mouse" << endl
-	<< "using opencv threshold = " << bThreshWithOpenCV <<" (press spacebar)" << endl
-	<< "set near threshold " << nearThreshold << " (press: + -)" << endl
-	<< "set far threshold " << farThreshold << " (press: < >) num blobs found " << contourFinder.nBlobs
-	<< ", fps: " << ofGetFrameRate() << endl
-	<< "press c to close the connection and o to open it again, connection is: " << kinect.isConnected() << endl
-	<< "press UP and DOWN to change the tilt angle: " << angle << " degrees" << endl
-	<< "press 1-5 & 0 to change the led mode (mac/linux only)" << endl;
-	ofDrawBitmapString(reportStream.str(),20,652);
-}
-
-void testApp::drawPointCloud() {
-	int w = 640;
-	int h = 480;
-	ofMesh mesh;
-	mesh.setMode(OF_PRIMITIVE_POINTS);
-	int step = 2;
-	for(int y = 0; y < h; y += step) {
-		for(int x = 0; x < w; x += step) {
-			if(kinect.getDistanceAt(x, y) > 0) {
-				mesh.addColor(kinect.getColorAt(x,y));
-				mesh.addVertex(kinect.getWorldCoordinateAt(x, y));
-			}
-		}
-	}
-	glPointSize(3);
-	ofPushMatrix();
-	// the projected points are 'upside down' and 'backwards'
-	ofScale(1, -1, -1);
-	ofTranslate(0, 0, -1000); // center the points a bit
-	glEnable(GL_DEPTH_TEST);
-	mesh.drawVertices();
-	glDisable(GL_DEPTH_TEST);
-	ofPopMatrix();
-}
-
-//--------------------------------------------------------------
-void testApp::exit() {
-	kinect.setCameraTiltAngle(0); // zero the tilt on exit
-	kinect.close();
-
-#ifdef USE_TWO_KINECTS
-	kinect2.close();
+    kinect2.update();
 #endif
 }
 
 //--------------------------------------------------------------
-void testApp::keyPressed (int key) {
-	switch (key) {
-		case ' ':
-			bThreshWithOpenCV = !bThreshWithOpenCV;
-			break;
+void testApp::draw()
+{
 
-		case'p':
-			bDrawPointCloud = !bDrawPointCloud;
-			break; // TODO : remove this point cloud
+    ofSetColor(255, 255, 255);
 
-		case '>':
-		case '.':
-			farThreshold ++;
-			if (farThreshold > 255) farThreshold = 255;
-			break;
+    if(bDrawPointCloud)
+    {
+        easyCam.begin();
+        drawPointCloud();
+        easyCam.end();
+    }
+    else
+    {
+        // draw from the live kinect
+        kinect.drawDepth(10, 10, 400, 300);
+        kinect.draw(420, 10, 400, 300);
 
-		case '<':
-		case ',':
-			farThreshold --;
-			if (farThreshold < 0) farThreshold = 0;
-			break;
+        grayImage.draw(10, 320, 400, 300);
+        contourFinder.draw(10, 320, 400, 300);
 
-		case '+':
-		case '=':
-			nearThreshold ++;
-			if (nearThreshold > 255) nearThreshold = 255;
-			break;
+#ifdef USE_TWO_KINECTS
+        kinect2.draw(420, 320, 400, 300);
+#endif
+    }
 
-		case '-':
-			nearThreshold --;
-			if (nearThreshold < 0) nearThreshold = 0;
-			break;
+    // draw instructions
+    ofSetColor(255, 255, 255);
+    stringstream reportStream;
+    reportStream << "accel is: " << ofToString(kinect.getMksAccel().x, 2) << " / "
+    << ofToString(kinect.getMksAccel().y, 2) << " / "
+    << ofToString(kinect.getMksAccel().z, 2) << endl
+    << "press p to switch between images and point cloud, rotate the point cloud with the mouse" << endl
+    << "using threshold = " << bThreshWithOpenCV <<" (press spacebar)" << endl
+    << "set near threshold " << nearThreshold << " (press: A S) (precise: a s)" << endl
+    << "set far threshold " << farThreshold << " (press: Z X) (precise: z x) num blobs found " << contourFinder.nBlobs
+    << ", fps: " << ofGetFrameRate() << endl
+    << "press c to close the connection and o to open it again, connection is: " << kinect.isConnected() << endl
+    << "press UP and DOWN to change the tilt angle: " << angle << " degrees" << endl
+    << "press 1-5 & 0 to change the led mode (mac/linux only)" << endl;
+    ofDrawBitmapString(reportStream.str(),20,652);
+}
 
-		case 'w':
-			kinect.enableDepthNearValueWhite(!kinect.isDepthNearValueWhite());
-			break;
+void testApp::drawPointCloud()
+{
+    int w = 640;
+    int h = 480;
+    ofMesh mesh;
+    mesh.setMode(OF_PRIMITIVE_POINTS);
+    int step = 2;
+    for(int y = 0; y < h; y += step)
+    {
+        for(int x = 0; x < w; x += step)
+        {
+            if(kinect.getDistanceAt(x, y) > 0)
+            {
+                mesh.addColor(kinect.getColorAt(x,y));
+                mesh.addVertex(kinect.getWorldCoordinateAt(x, y));
+            }
+        }
+    }
+    glPointSize(3);
+    ofPushMatrix();
+    // the projected points are 'upside down' and 'backwards'
+    ofScale(1, -1, -1);
+    ofTranslate(0, 0, -1000); // center the points a bit
+    glEnable(GL_DEPTH_TEST);
+    mesh.drawVertices();
+    glDisable(GL_DEPTH_TEST);
+    ofPopMatrix();
+}
 
-		case 'o':
-			kinect.setCameraTiltAngle(angle); // go back to prev tilt
-			kinect.open();
-			break;
+//--------------------------------------------------------------
+void testApp::exit()
+{
+    //kinect.setCameraTiltAngle(0); // zero the tilt on exit
+    kinect.close();
 
-		case 'c':
-			kinect.setCameraTiltAngle(0); // zero the tilt
-			kinect.close();
-			break;
+#ifdef USE_TWO_KINECTS
+    kinect2.close();
+#endif
+}
 
-		case '1':
-			kinect.setLed(ofxKinect::LED_GREEN);
-			break;
+//--------------------------------------------------------------
+void testApp::keyPressed (int key)
+{
+    switch (key)
+    {
+    case ' ':
+        bThreshWithOpenCV = !bThreshWithOpenCV;
+        break;
 
-		case '2':
-			kinect.setLed(ofxKinect::LED_YELLOW);
-			break;
+    case'p':
+        bDrawPointCloud = !bDrawPointCloud;
+        break; // TODO : remove this point cloud
 
-		case '3':
-			kinect.setLed(ofxKinect::LED_RED);
-			break;
+        //thresholding the depth
+        //by a factor of 10mm
+    case 'S':
+        farThreshold +=10;
+        if (farThreshold > 4000) farThreshold = 4000;
+        kinect.setDepthClipping( nearThreshold, farThreshold);
+        break;
 
-		case '4':
-			kinect.setLed(ofxKinect::LED_BLINK_GREEN);
-			break;
+    case 'A':
+        if (farThreshold > nearThreshold + 10) farThreshold -=10;
+        kinect.setDepthClipping( nearThreshold, farThreshold);
+        break;
 
-		case '5':
-			kinect.setLed(ofxKinect::LED_BLINK_YELLOW_RED);
-			break;
+    case 'X':
+        if (nearThreshold < farThreshold -10) nearThreshold +=10;;
+        kinect.setDepthClipping( nearThreshold, farThreshold);
+        break;
 
-		case '0':
-			kinect.setLed(ofxKinect::LED_OFF);
-			break;
+    case 'Z':
+        nearThreshold -=10;
+        if (nearThreshold <= 500) nearThreshold = 500;
+        kinect.setDepthClipping( nearThreshold, farThreshold);
+        break;
 
-		case OF_KEY_UP:
-			angle++;
-			if(angle>30) angle=30;
-			kinect.setCameraTiltAngle(angle);
-			break;
+        //by a factor of 1mm(precise)
+    case 's':
+        farThreshold++;
+        if (farThreshold > 4000) farThreshold = 4000;
+        kinect.setDepthClipping( nearThreshold, farThreshold);
+        break;
 
-		case OF_KEY_DOWN:
-			angle--;
-			if(angle<-30) angle=-30;
-			kinect.setCameraTiltAngle(angle);
-			break;
-	}
+    case 'a':
+        if (farThreshold > nearThreshold ) farThreshold--;
+        kinect.setDepthClipping( nearThreshold, farThreshold);
+        break;
+
+    case 'x':
+        if (nearThreshold < farThreshold) nearThreshold++;;
+        kinect.setDepthClipping( nearThreshold, farThreshold);
+        break;
+
+    case 'z':
+        nearThreshold --;
+        if (nearThreshold <= 500) nearThreshold = 500;
+        kinect.setDepthClipping( nearThreshold, farThreshold);
+        break;
+
+    case 'w':
+        kinect.enableDepthNearValueWhite(!kinect.isDepthNearValueWhite());
+        break;
+
+    case 'o':
+        kinect.setCameraTiltAngle(angle); // go back to prev tilt
+        kinect.open();
+        break;
+
+    case 'c':
+        kinect.setCameraTiltAngle(0); // zero the tilt
+        kinect.close();
+        break;
+
+    case '1':
+        kinect.setLed(ofxKinect::LED_GREEN);
+        break;
+
+    case '2':
+        kinect.setLed(ofxKinect::LED_YELLOW);
+        break;
+
+    case '3':
+        kinect.setLed(ofxKinect::LED_RED);
+        break;
+
+    case '4':
+        kinect.setLed(ofxKinect::LED_BLINK_GREEN);
+        break;
+
+    case '5':
+        kinect.setLed(ofxKinect::LED_BLINK_YELLOW_RED);
+        break;
+
+    case '0':
+        kinect.setLed(ofxKinect::LED_OFF);
+        break;
+
+    case OF_KEY_UP:
+        angle++;
+        if(angle>30) angle=30;
+        kinect.setCameraTiltAngle(angle);
+        break;
+
+    case OF_KEY_DOWN:
+        angle--;
+        if(angle<-30) angle=-30;
+        kinect.setCameraTiltAngle(angle);
+        break;
+    }
 }
 
 //--------------------------------------------------------------

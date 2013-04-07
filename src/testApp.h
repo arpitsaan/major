@@ -3,7 +3,9 @@
 #include "ofMain.h"
 #include "ofxOpenCv.h"
 #include "ofxKinect.h"
+//#include <opencv2/opencv.hpp>
 
+//using namespace cv;
 // uncomment this to read from two kinects simultaneously
 //#define USE_TWO_KINECTS
 
@@ -35,7 +37,9 @@ public:
 	ofxCvGrayscaleImage grayThreshNear; // the near thresholded image
 	ofxCvGrayscaleImage grayThreshFar; // the far thresholded image
 
-	ofxCvContourFinder contourFinder;
+    ofxCvContourFinder contourFinder;
+
+   cv::Mat grayMat;
 
 	bool bThreshWithOpenCV;
 	bool bDrawPointCloud;
@@ -47,6 +51,8 @@ public:
 
 	int mousex;
 	int mousey;
+	int mouseDepth;
+
 	// used for viewing the point cloud
 	ofEasyCam easyCam;
 };
