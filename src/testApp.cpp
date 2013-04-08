@@ -1,7 +1,8 @@
 #include "testApp.h"
-#include <opencv2/opencv.hpp>
+//#include <opencv2/opencv.hpp>
 //-------------------------------------------------------t-------
 void testApp::setup()
+
 {
     ofSetLogLevel(OF_LOG_VERBOSE);
 
@@ -21,18 +22,17 @@ void testApp::setup()
     kinect2.open();
 #endif
 
-    colorImg.allocate(kinect.width, kinect.height);
-    grayImage.allocate(kinect.width, kinect.height);
-    grayThreshNear.allocate(kinect.width, kinect.height);
-    grayThreshFar.allocate(kinect.width, kinect.height);
+    //colorImg.allocate(kinect.width, kinect.height);
+    //grayImage.allocate(kinect.width, kinect.height);
+    //grayThreshNear.allocate(kinect.width, kinect.height);
+    //grayThreshFar.allocate(kinect.width, kinect.height);
 
     // zero the tilt on startup
     angle = -2;
     kinect.setCameraTiltAngle(angle);
 
-
     nearThreshold = 500;
-    farThreshold = 970;
+    farThreshold = 920;
 
     kinect.setDepthClipping( nearThreshold, farThreshold);
 
@@ -44,6 +44,17 @@ void testApp::setup()
 
     // start from the front
     bDrawPointCloud = false;
+    grayOfImage.allocate(480, 640, OF_IMAGE_GRAYSCALE);
+    colorOfImage.allocate(480,640, OF_IMAGE_COLOR);
+    grayMat.create(480, 640, CV_8UC1);
+    temp1.create(480, 640, CV_8UC1);
+    temp2.create(480,640, CV_8UC1);
+    depthThresh.create(480,640, CV_8UC1);
+
+    colorMat.create(480, 640, CV_8UC3);
+
+    //grayMat = imread("/home/arpit/Pictures/1.png");
+    //imshow("hello", grayMat);
 }
 
 //--------------------------------------------------------------
@@ -53,20 +64,50 @@ void testApp::update()
     ofBackground(100, 100, 100);
 
     kinect.update();
-    cv::waitKey(200);
+
     // there is a new frame and we are connected
     if(kinect.isFrameNew())
     {
 
         // load grayscale depth image from the kinect source
-        grayImage.setFromPixels(kinect.getDepthPixels(), kinect.width, kinect.height);
+//        grayImage.setFromPixels(kinect.getDepthPixels(), kinect.width, kinect.height, OF_IMAGE_GRAYSCALE);
+   		grayMat=Mat(cv::Size(kinect.width, kinect.height), CV_8UC1, kinect.getDepthPixels());
 
+
+        //grayMat = cv::Mat::zeros(480,640,CV_8UC1);
+        //imread("/home/arpit/Pictures/1.png");
+
+        threshold(grayMat, temp1, 0, 255, 3);
+        threshold(temp1, temp2, 254, 255, 4);
+        threshold(temp2, depthThresh, 0, 255, 0);
 
 
         if(bThreshWithOpenCV)
         {
-            grayImage.threshold(0,false);
+
+            blur( depthThresh, depthThresh, cv::Size(3,3) );
+
+    /*        findContours( depthThresh, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, cv::Point(0,0) );
+            contoursObb.resize(contours.size());
+
+            for(size_t i=0; i<contours.size() ; i++)
+            {
+                contoursObb[i] = minAreaRect(contours[i]);
+
+                if(contoursObb[i].size() > 100)
+               {
+                   contoursObb[i].points(obbPoints);
+                   for(int i=0; i<4 ; i++)
+                   {
+                      obbPoints[i].
+                   }
+               }
+
+            }*/
+
+
         }
+
 //
 //		// we do two thresholds - one for the far plane and one for the near plane
 //		// we then do a cvAnd to get the pixels which are a union of the two thresholds
@@ -76,27 +117,18 @@ void testApp::update()
 //			grayThreshNear.threshold(nearThreshold, true);
 //			grayThreshFar.threshold(farThreshold);
 //			cvAnd(grayThreshNear.getCvImage(), grayThreshFar.getCvImage(), grayImage.getCvImage(), NULL);
-//		} else {
-//
-//			// or we do it ourselves - show people how they can work with the pixels
-//			unsigned char * pix = grayImage.getPixels();
-//
-//			int numPixels = grayImage.getWidth() * grayImage.getHeight();
-//			for(int i = 0; i < numPixels; i++) {
-//				if(pix[i] < nearThreshold && pix[i] > farThreshold) {
-//					pix[i] = 255;
-//				} else {
-//					pix[i] = 0;
-//				}
-//			}
 //		}
 
         // update the cv images
-        grayImage.flagImageChanged();
+//        grayImage.flagImageChanged();
 
         // find contours which are between the size of 20 pixels and 1/3 the w*h pixels.
         // also, find holes is set to true so we will get interior contours as well....
-        contourFinder.findContours(grayImage, 40, (kinect.width*kinect.height)/2, 20, false);
+//        contourFinder.findContours(grayImage, 40, (kinect.width*kinect.height)/2, 20, false);
+
+        grayOfImage.setFromPixels((unsigned char *)IplImage(depthThresh).imageData, depthThresh.size().width, depthThresh.size().height, OF_IMAGE_GRAYSCALE);
+
+
     }
 
 #ifdef USE_TWO_KINECTS
@@ -121,9 +153,10 @@ void testApp::draw()
         // draw from the live kinect
         kinect.drawDepth(10, 10, 400, 300);
         kinect.draw(420, 10, 400, 300);
-
-        grayImage.draw(10, 320, 400, 300);
-        contourFinder.draw(10, 320, 400, 300);
+        //imshow("kinect Data",grayMat);
+        //waitKey(1);
+        grayOfImage.draw(10, 320, 400, 300);
+        //contourFinder.draw(10, 320, 400, 300);
 
 #ifdef USE_TWO_KINECTS
         kinect2.draw(420, 320, 400, 300);
@@ -139,7 +172,7 @@ void testApp::draw()
     << "press p to switch between images and point cloud, rotate the point cloud with the mouse" << endl
     << "using threshold = " << bThreshWithOpenCV <<" (press spacebar)" << endl
     << "set near threshold " << nearThreshold << " (press: A S) (precise: a s)" << endl
-    << "set far threshold " << farThreshold << " (press: Z X) (precise: z x) num blobs found " << contourFinder.nBlobs
+    << "set far threshold " << farThreshold //<< " (press: Z X) (precise: z x) num blobs found " << contourFinder.nBlobs
     << ", fps: " << ofGetFrameRate() << endl
     << "press c to close the connection and o to open it again, connection is: " << kinect.isConnected() << endl
     << "press UP and DOWN to change the tilt angle: " << angle << " degrees" << endl

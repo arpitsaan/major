@@ -10,21 +10,21 @@ OF_ROOT = ../../..
 # for example search paths like:
 # USER_CFLAGS = -I src/objects
 
-USER_CFLAGS = $(shell pkg-config libusb-1.0 --cflags) 
-CFLAGS += $(shell pkg-config opencv --cflags)
+USER_CFLAGS = $(shell pkg-config opencv libusb-1.0 --cflags) 
+#CFLAGS += $(shell pkg-config opencv --cflags)
 
 # USER_LDFLAGS allows to pass custom flags to the linker
 # for example libraries like:
 # USER_LD_FLAGS = libs/libawesomelib.a
 
-USER_LDFLAGS = 
+USER_LDFLAGS =  
 
 
 # use this to add system libraries for example:
-# USER_LIBS = -lpango
+#USER_LIBS = -lcv -lcxcore -lhighgui
  
-USER_LIBS = $(shell pkg-config libusb-1.0 --libs)
-SYSTEMLIBS += $(shell pkg-config opencv --libs)
+USER_LIBS = $(shell pkg-config opencv libusb-1.0 --libs)
+#SYSTEMLIBS = $(shell pkg-config opencv --libs)
 
 # change this to add different compiler optimizations to your project
 

@@ -1,11 +1,14 @@
 #pragma once
 
 #include "ofMain.h"
-#include "ofxOpenCv.h"
+//#include "ofxOpenCv.h"
 #include "ofxKinect.h"
-//#include <opencv2/opencv.hpp>
 
-//using namespace cv;
+#include<iostream>
+#include <opencv2/opencv.hpp>
+
+
+using namespace cv;
 // uncomment this to read from two kinects simultaneously
 //#define USE_TWO_KINECTS
 
@@ -30,7 +33,7 @@ public:
 #ifdef USE_TWO_KINECTS
 	ofxKinect kinect2;
 #endif
-
+/*
 	ofxCvColorImage colorImg;
 
 	ofxCvGrayscaleImage grayImage; // grayscale depth image
@@ -38,8 +41,24 @@ public:
 	ofxCvGrayscaleImage grayThreshFar; // the far thresholded image
 
     ofxCvContourFinder contourFinder;
+*/
 
-   cv::Mat grayMat;
+    ofImage grayOfImage;
+    ofImage colorOfImage;
+
+    Mat grayMat;
+
+    Mat temp1;
+    Mat temp2;
+
+    Mat depthThresh;
+    Mat colorMat;
+
+    vector <vector <cv::Point> > contours;
+    vector <Vec4i> hierarchy;
+
+    vector <cv::RotatedRect> contoursObb;
+    Point2f obbPoints[4];
 
 	bool bThreshWithOpenCV;
 	bool bDrawPointCloud;
